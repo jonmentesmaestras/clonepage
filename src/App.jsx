@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import EditorPanel from './editor/EditorPanel';
 import { 
   Zap, 
   Copy, 
@@ -252,12 +253,7 @@ const App = () => {
             )}
 
             {activeTab === 'editor' ? (
-              <textarea 
-                readOnly
-                value={generatedHtml}
-                className="w-full h-full bg-slate-950 p-4 text-xs font-mono text-emerald-400/90 outline-none resize-none leading-relaxed"
-                placeholder="El código transformado aparecerá aquí..."
-              />
+              <EditorPanel />
             ) : (
               <iframe 
                 srcDoc={generatedHtml}
