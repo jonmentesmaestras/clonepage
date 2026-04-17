@@ -10,7 +10,7 @@ export default function EditorPanel() {
     <div className="flex w-full h-full bg-gray-50 overflow-hidden font-sans">
       {/* Sidebar */}
       <div 
-        className={`${sidebarOpen ? 'w-80 border-r border-gray-200' : 'w-0'} 
+        className={`${sidebarOpen ? 'w-[370px] border-r border-gray-200' : 'w-0'} 
         bg-white h-full transition-all duration-300 ease-in-out shrink-0 overflow-y-auto`}
       >
         <Sidebar />

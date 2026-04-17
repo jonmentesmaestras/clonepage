@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import EditorPanel from './editor/EditorPanel';
+import { useEditorStore } from './editor/store/useEditorStore';
+import { injectEditorBridge } from './editor/utils/iframeBridge';
+import { uploadHtmlToS3 } from './utils/s3Uploader';
 import { 
   Zap, 
   Copy, 
@@ -20,10 +23,12 @@ const App = () => {
   const [productName, setProductName] = useState('La autocuración energética');
   const [targetCurrency, setTargetCurrency] = useState('USD');
   const [generatedHtml, setGeneratedHtml] = useState('');
+  const [hasClonedHtml, setHasClonedHtml] = useState(false); // true permanentemente tras primer OK 200
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('preview'); // 'preview' or 'editor'
   const [editorMode, setEditorMode] = useState(false);
+  const [previewTimestamp, setPreviewTimestamp] = useState(Date.now());
 
 
 
@@ -52,10 +57,30 @@ const App = () => {
         });
 
         const data = await response.json();
-
         if (!response.ok) throw new Error(data.error || 'API request failed');
         
+        // 1. Guardar el HTML generado por la IA en el estado local
         setGeneratedHtml(data.html);
+
+        // 2. Persistir el HTML en S3 mediante el endpoint /api/upload
+        try {
+          await uploadHtmlToS3(data.html);
+          
+          // 3. Solo si la subida fue exitosa, habilitamos el modo CloudFront
+          setHasClonedHtml(true); 
+          setPreviewTimestamp(Date.now());
+          
+          console.log('✅ HTML persistido exitosamente en S3.');
+        } catch (uploadErr) {
+          console.error('❌ Error al persistir HTML inicial en S3:', uploadErr);
+          // Opcional: Podríamos dejar hasClonedHtml en false para que el fallback srcDoc funcione
+        }
+
+        // 4. Alimentar el editor WYSIWYG
+        useEditorStore.getState().setHtmlContent(injectEditorBridge(data.html));
+        useEditorStore.getState().setFileHandle(null);
+
+        // 5. Cambiar a la pestaña de vista previa
         setActiveTab('preview');
       } catch (err) {
         if (retries < maxRetries) {
@@ -219,9 +244,8 @@ const App = () => {
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
           <div className="flex border-b border-slate-800">
             <button 
-              onClick={() => setActiveTab('preview')}
-              disabled={!generatedHtml}
-              className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'preview' ? 'bg-slate-800 text-purple-400 border-b-2 border-purple-500' : 'text-slate-500 hover:text-slate-300'} ${!generatedHtml && 'opacity-50 cursor-not-allowed'}`}
+              onClick={() => { setActiveTab('preview'); setEditorMode(false); setPreviewTimestamp(Date.now()); }}
+              className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'preview' ? 'bg-slate-800 text-purple-400 border-b-2 border-purple-500' : 'text-slate-500 hover:text-slate-300'}`}
             >
               <Eye className="w-4 h-4" /> Vibe Check (Vista Previa)
             </button>
@@ -234,7 +258,7 @@ const App = () => {
           </div>
 
           <div className="flex-1 bg-slate-950 min-h-0 relative">
-            {!generatedHtml && !isGenerating && (
+            {!generatedHtml && !isGenerating && activeTab !== 'editor' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 p-8 text-center">
                 <Globe className="w-12 h-12 mb-4 opacity-20" />
                 <p className="text-sm">Pega el HTML de la página probada a la izquierda y presiona transformar.</p>
@@ -256,7 +280,9 @@ const App = () => {
               <EditorPanel />
             ) : (
               <iframe 
-                srcDoc={generatedHtml}
+                key={previewTimestamp}
+                src={hasClonedHtml ? `https://pulpo-landing-demo-9c9676.s3.us-east-1.amazonaws.com/index.html?v=${previewTimestamp}` : undefined}
+                srcDoc={!hasClonedHtml ? generatedHtml : undefined}
                 className="w-full h-full border-none bg-white"
                 title="Preview"
               />

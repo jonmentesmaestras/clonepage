@@ -5,7 +5,7 @@ import JoditEditor from 'jodit-react';
 import ImageModal from './ImageModal';
 
 export default function Sidebar() {
-  const { selectedElement, updateElementData } = useEditorStore();
+  const { selectedElement, updateElementData, isSaving, saveProgress } = useEditorStore();
   
   // Local state for the form inputs
   const [formData, setFormData] = useState({ text: '', htmlContent: '', tag: '', width: '', height: '', src: '' });
@@ -14,7 +14,6 @@ export default function Sidebar() {
   // Media Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [localImageFile, setLocalImageFile] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
 
   // Sync form data when the selected element changes
   useEffect(() => {
@@ -41,46 +40,46 @@ export default function Sidebar() {
   const handleSave = async () => {
     if (!selectedElement || !window.__EDITOR_IFRAME_REF?.current) return;
     
-    setIsSaving(true);
-    let finalUpdates = { ...formData };
-
+    // The Progress and isSaving state is now managed globally by Canvas.jsx
+    // upon receiving the SAVE_CLEAN_HTML event triggered by the message below.
+    
+    let finalUpdates = { ...formData, persist: true };
+  
     // Lógica de subida de imagen externa
     if (selectedElement.tag === 'IMG' && localImageFile) {
+        useEditorStore.getState().setIsSaving(true);
+        useEditorStore.getState().setSaveProgress(10);
+        
         const payload = new FormData();
+        payload.append('bucket_name', 'pulpo-landing-demo-9c9676');
+        payload.append('key', localImageFile.name || 'image.png');
         payload.append('image', localImageFile);
+        
         try {
-            const res = await fetch('/api/upload-image', {
+            console.log("Iniciando subida de imagen...");
+            const res = await fetch('http://127.0.0.1:5000/api/upload-image', {
                 method: 'POST',
                 body: payload
             });
             const data = await res.json();
-            if (data.image) {
-                finalUpdates.src = data.image; // URL permanente del backend
+            console.log("Respuesta subida imagen S3:", data);
+            
+            if (data.error === "false" || data.error === false || data.image_url) {
+                console.log("Sustituyendo el src antiguo por:", data.image_url);
+                finalUpdates.src = data.image_url; // 2. debe cambiar en el editor la imagen antigua por la nueva
+                setLocalImageFile(null); 
+            } else {
+                throw new Error(data.message || 'Error al subir la imagen.');
             }
         } catch(e) {
             console.error('Error uploading image', e);
-            alert('Hubo un error subiendo la imagen al servidor.');
-            setIsSaving(false);
+            alert('Hubo un error subiendo la imagen al servidor: ' + e.message);
+            useEditorStore.getState().setIsSaving(false);
+            useEditorStore.getState().setSaveProgress(0);
             return;
         }
     }
-
-    // Request write permissions WITHIN the user gesture to avoid Silent NotAllowedError
-    const currentHandle = useEditorStore.getState().fileHandle;
-    if (currentHandle) {
-      try {
-        const options = { mode: 'readwrite' };
-        if ((await currentHandle.queryPermission(options)) !== 'granted') {
-          await currentHandle.requestPermission(options);
-        }
-      } catch (err) {
-        console.warn('Permiso de escritura denegado por el usuario o error API.', err);
-        alert('No se otorgaron permisos para sobrescribir el archivo.');
-        setIsSaving(false);
-        return;
-      }
-    }
-
+  
     // Send message to the iframe to update the real DOM and trigger SAVE_CLEAN_HTML
     window.__EDITOR_IFRAME_REF.current.contentWindow.postMessage({
       type: 'UPDATE_ELEMENT',
@@ -89,24 +88,11 @@ export default function Sidebar() {
         updates: finalUpdates
       }
     }, '*');
-
+  
     // Update global store
     updateElementData(finalUpdates);
     
-    // Feedback momentáneo al usuario
-    const btn = document.getElementById('save-btn');
-    if (btn) {
-      const originalHTML = btn.innerHTML;
-      btn.innerHTML = '¡Guardado! ✅';
-      btn.classList.add('bg-green-600');
-      setTimeout(() => {
-        btn.innerHTML = originalHTML;
-        btn.classList.remove('bg-green-600');
-        setIsSaving(false);
-      }, 2000);
-    } else {
-      setIsSaving(false);
-    }
+    // El feedback visual de "¡Guardado! ✅" lo manejamos en el render del botón basado en el progreso
   };
 
   // Live Sync for the Rich Text Editor
@@ -150,7 +136,7 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white select-none">
+    <div className="flex flex-col h-full bg-white text-gray-900 select-none">
       {/* Sidebar Header */}
       <div className="flex items-center justify-center p-4 border-b border-gray-200 bg-gray-50">
         <h2 className="font-semibold text-gray-800 text-sm">
@@ -186,11 +172,13 @@ export default function Sidebar() {
             {/* RICH TEXT EDITOR */}
             {isRichTextNode && (
                <div className="flex flex-col gap-4">
-                 <JoditEditor
-                   value={formData.htmlContent}
-                   config={joditConfig}
-                   onChange={handleRteChange}
-                 />
+                 <div className="[&_.jodit-wysiwyg]:!text-gray-900">
+                   <JoditEditor
+                     value={formData.htmlContent}
+                     config={joditConfig}
+                     onChange={handleRteChange}
+                   />
+                 </div>
                  <div className="flex flex-col gap-1">
                    <label className="text-xs font-medium text-gray-500">Etiqueta HTML</label>
                    <select 
@@ -331,13 +319,40 @@ export default function Sidebar() {
 
       {/* Save Button */}
       <div className="p-4 border-t border-gray-200">
+        {isSaving && (
+          <div className="mb-3">
+             <div className="flex justify-between text-[10px] font-semibold text-slate-500 mb-1">
+                <span>Guardando cambios...</span>
+                <span>{saveProgress}%</span>
+             </div>
+             <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                <div 
+                  className="bg-purple-500 h-full transition-all duration-500 ease-out" 
+                  style={{ width: `${saveProgress}%` }}
+                ></div>
+             </div>
+          </div>
+        )}
+
         <button
           id="save-btn" 
           onClick={handleSave}
           disabled={isSaving}
-          className={`w-full flex items-center justify-center gap-2 text-white font-medium py-3 rounded text-sm transition-colors duration-300 ${isSaving ? 'bg-slate-500 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800'}`}
+          className={`w-full flex items-center justify-center gap-2 text-white font-medium py-3 rounded text-sm transition-all duration-300 ${
+            isSaving 
+            ? 'bg-slate-400 cursor-not-allowed' 
+            : saveProgress === 100 
+              ? 'bg-green-600' 
+              : 'bg-slate-900 hover:bg-slate-800'
+          }`}
         >
-          {isSaving ? 'Guardando...' : <>Guardar <CheckCircle size={16} /></>}
+          {isSaving ? (
+            <>Publicando...</>
+          ) : saveProgress === 100 ? (
+            <>¡Guardado! ✅</>
+          ) : (
+            <>Guardar <CheckCircle size={16} /></>
+          )}
         </button>
         <p className="mt-2 text-[10px] text-gray-400 text-center font-mono">&lt;{selectedElement.tag}&gt; Actual</p>
       </div>

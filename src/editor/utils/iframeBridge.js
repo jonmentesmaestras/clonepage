@@ -68,6 +68,8 @@ export const iframeScript = `
       }
       if (updates.src !== undefined && el.tagName === 'IMG') {
         el.setAttribute('src', updates.src);
+        el.removeAttribute('srcset');
+        el.removeAttribute('sizes');
       }
 
       // If Tag changes (e.g. H2 -> H3), we must replace the element
@@ -146,3 +148,17 @@ export const iframeStyle = `
     }
   </style>
 `;
+
+/**
+ * Inyecta el script y estilos del bridge WYSIWYG en un string HTML raw.
+ * Función compartida para Canvas.jsx (file picker) y App.jsx (respuesta del servidor).
+ * @param {string} rawHtml - HTML sin bridge inyectado
+ * @returns {string} - HTML con bridge listo para usarse en el editor
+ */
+export function injectEditorBridge(rawHtml) {
+  const scriptInjection = `<script>${iframeScript}</script>`;
+  if (rawHtml.includes('</body>')) {
+    return rawHtml.replace('</body>', `${iframeStyle}${scriptInjection}</body>`);
+  }
+  return rawHtml + iframeStyle + scriptInjection;
+}
