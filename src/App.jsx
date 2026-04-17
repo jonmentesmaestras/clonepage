@@ -15,7 +15,9 @@ import {
   AlertCircle,
   Loader2,
   Eye,
-  FilePlus
+  FilePlus,
+  Monitor,
+  Smartphone
 } from 'lucide-react';
 
 const App = () => {
@@ -29,6 +31,7 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('preview'); // 'preview' or 'editor'
   const [editorMode, setEditorMode] = useState(false);
   const [previewTimestamp, setPreviewTimestamp] = useState(Date.now());
+  const [previewViewMode, setPreviewViewMode] = useState('desktop');
 
 
 
@@ -242,7 +245,7 @@ const App = () => {
 
         {/* Right Side: Preview & Output */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
-          <div className="flex border-b border-slate-800">
+          <div className="flex border-b border-slate-800 shrink-0">
             <button 
               onClick={() => { setActiveTab('preview'); setEditorMode(false); setPreviewTimestamp(Date.now()); }}
               className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'preview' ? 'bg-slate-800 text-purple-400 border-b-2 border-purple-500' : 'text-slate-500 hover:text-slate-300'}`}
@@ -279,13 +282,33 @@ const App = () => {
             {activeTab === 'editor' ? (
               <EditorPanel />
             ) : (
-              <iframe 
-                key={previewTimestamp}
-                src={hasClonedHtml ? `https://pulpo-landing-demo-9c9676.s3.us-east-1.amazonaws.com/index.html?v=${previewTimestamp}` : undefined}
-                srcDoc={!hasClonedHtml ? generatedHtml : undefined}
-                className="w-full h-full border-none bg-white"
-                title="Preview"
-              />
+              <div className="flex flex-col w-full h-full">
+                <div className="bg-slate-900 border-b border-slate-800 p-1.5 flex gap-1.5 pl-4 shrink-0">
+                  <button
+                    onClick={() => setPreviewViewMode('desktop')}
+                    className={`p-1.5 rounded-md transition-all flex items-center justify-center ${previewViewMode === 'desktop' ? 'bg-slate-800 text-white shadow-sm ring-1 ring-slate-700' : 'text-slate-500 hover:bg-slate-800/50 hover:text-slate-300'}`}
+                    title="Vista Escritorio"
+                  >
+                    <Monitor className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setPreviewViewMode('mobile')}
+                    className={`p-1.5 rounded-md transition-all flex items-center justify-center ${previewViewMode === 'mobile' ? 'bg-slate-800 text-white shadow-sm ring-1 ring-slate-700' : 'text-slate-500 hover:bg-slate-800/50 hover:text-slate-300'}`}
+                    title="Vista Teléfono"
+                  >
+                    <Smartphone className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className={`flex-1 overflow-hidden transition-colors duration-300 ${previewViewMode === 'mobile' ? 'flex justify-center bg-[#e2e8f0]' : ''}`}>
+                  <iframe 
+                    key={previewTimestamp}
+                    src={hasClonedHtml ? `https://pulpo-landing-demo-9c9676.s3.us-east-1.amazonaws.com/index.html?v=${previewTimestamp}` : undefined}
+                    srcDoc={!hasClonedHtml ? generatedHtml : undefined}
+                    className={`transition-all duration-300 bg-white ${previewViewMode === 'mobile' ? 'w-[400px] h-full shadow-lg border-x border-slate-300' : 'w-full h-full border-none'}`}
+                    title="Preview"
+                  />
+                </div>
+              </div>
             )}
           </div>
         </div>
