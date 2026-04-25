@@ -7,19 +7,19 @@ import { uploadHtmlToS3 } from '../../utils/s3Uploader';
 export default function Canvas() {
   const { htmlContent, setHtmlContent, setSelectedElement, setFileHandle } = useEditorStore();
   const iframeRef = useRef(null);
+  const prevHtmlRef = useRef(htmlContent);
   
-  // Usamos un estado local para el srcDoc del iframe.
-  // Esto evita que el iframe parpadee o recargue su posición de scroll si actualizamos el htmlContent global en cada guardado.
+  // Estado local para el srcDoc del iframe.
+  // Evita parpadeos al guardar, pero se sincroniza cuando el store recibe HTML nuevo (ej. post-clonación).
   const [iframeData, setIframeData] = useState(htmlContent);
 
-  // Sincronizar en caso de un borrado forzado o carga externa
+  // Sincronizar iframeData cuando htmlContent del store cambia (nueva clonación, carga de archivo, etc.)
   useEffect(() => {
-    if (!iframeData && htmlContent) {
+    if (htmlContent !== prevHtmlRef.current) {
+      prevHtmlRef.current = htmlContent;
       setIframeData(htmlContent);
-    } else if (!htmlContent && iframeData) {
-      setIframeData('');
     }
-  }, [htmlContent, iframeData]);
+  }, [htmlContent]);
 
   // Expose iframeRef globally so Sidebar can send messages to it
   useEffect(() => {
@@ -117,7 +117,12 @@ export default function Canvas() {
         srcDoc={iframeData}
         className="w-full h-full border-0"
         title="Editor Canvas"
-        sandbox="allow-same-origin allow-scripts"
+        sandbox="allow-same-origin allow-scripts allow-popups allow-modals"
+        onLoad={() => {
+          console.log('✅ Editor iframe loaded');
+          // Re-register the ref globally when iframe reloads
+          window.__EDITOR_IFRAME_REF = iframeRef;
+        }}
       />
     </div>
   );

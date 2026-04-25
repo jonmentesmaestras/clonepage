@@ -1,8 +1,12 @@
-# Tareas: Actualización de Editor y Pestañas
+# Tareas: Inicio de la Aplicación
 
-- [ ] Modificar estado por defecto de `activeTab` en `src/App.jsx` a `preview`.
-- [ ] Intercambiar la posición de los botones "Vibe Check (Vista Previa)" y "Código Generado" en el JSX de `src/App.jsx`.
-- [ ] Renombrar el botón original "Código Generado" a "Editor".
+- [x] Iniciar el servidor de desarrollo (backend y frontend) usando `npm run dev`.
+- [x] Verificar que la aplicación esté accesible en el navegador.
 
 ## Notas
-- Los cambios en tabs preparan el terreno para integrar un editor funcional en la tab de `editor`.
+- El comando `npm run dev` utiliza `concurrently` para lanzar `server.js` y `vite` simultáneamente.
+
+## Revisión Final
+- [x] Backend iniciado en http://localhost:3001
+- [x] Frontend iniciado en http://localhost:5173
+- [x] UI verificada mediante subagente de navegación.

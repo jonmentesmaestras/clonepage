@@ -17,7 +17,8 @@ import {
   Eye,
   FilePlus,
   Monitor,
-  Smartphone
+  Smartphone,
+  Link
 } from 'lucide-react';
 
 const App = () => {
@@ -32,17 +33,53 @@ const App = () => {
   const [editorMode, setEditorMode] = useState(false);
   const [previewTimestamp, setPreviewTimestamp] = useState(Date.now());
   const [previewViewMode, setPreviewViewMode] = useState('desktop');
+  const [cloneUrl, setCloneUrl] = useState('');
 
 
 
   const handleGenerate = async () => {
-    if (!htmlInput) {
-      setError("Por favor, pega el código HTML de origen.");
+    if (!htmlInput && !cloneUrl) {
+      setError("Por favor, ingresa una URL a clonar o pega el código HTML de origen.");
+      return;
+    }
+
+    if (htmlInput && cloneUrl) {
+      setError("Por favor, rellena solo un campo: URL a Clonar O el HTML fuente, no ambos.");
       return;
     }
 
     setIsGenerating(true);
     setError(null);
+
+    let finalHtmlInput = htmlInput;
+
+    try {
+      if (cloneUrl) {
+        const fetchUrlResponse = await fetch('http://127.0.0.1:5000/api/extract-origin-html', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: cloneUrl })
+        });
+        
+        if (!fetchUrlResponse.ok) {
+           throw new Error(`Error ${fetchUrlResponse.status} extrayendo HTML de la URL.`);
+        }
+
+        const urlData = await fetchUrlResponse.json();
+        if (urlData.html) {
+          finalHtmlInput = urlData.html;
+          setHtmlInput(finalHtmlInput);
+          setCloneUrl(''); // Limpiamos para que el siguiente clic use la lógica de HTML directo.
+        } else {
+          throw new Error('La respuesta de extracción no contiene HTML válido.');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Error extrayendo URL a clonar.");
+      setIsGenerating(false);
+      return;
+    }
 
     let retries = 0;
     const maxRetries = 5;
@@ -53,7 +90,7 @@ const App = () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            htmlInput,
+            htmlInput: finalHtmlInput,
             productName,
             targetCurrency
           })
@@ -83,8 +120,9 @@ const App = () => {
         useEditorStore.getState().setHtmlContent(injectEditorBridge(data.html));
         useEditorStore.getState().setFileHandle(null);
 
-        // 5. Cambiar a la pestaña de vista previa
-        setActiveTab('preview');
+        // 5. Cambiar a la pestaña de editor para edición inmediata
+        setActiveTab('editor');
+        setEditorMode(true);
       } catch (err) {
         if (retries < maxRetries) {
           retries++;
@@ -197,6 +235,19 @@ const App = () => {
                     <option value="COP">Pesos Colombianos (COP)</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="space-y-1.5 flex flex-col">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                  <Link className="w-3 h-3 text-purple-400" /> URL a Clonar
+                </label>
+                <input 
+                  type="url"
+                  value={cloneUrl}
+                  onChange={(e) => setCloneUrl(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none transition-all cursor-text placeholder-slate-600"
+                  placeholder="Escribe o pega la URL de la página a clonar"
+                />
               </div>
 
               <div className="space-y-1.5 flex-1 flex flex-col min-h-0">
