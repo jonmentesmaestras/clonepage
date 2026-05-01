@@ -150,6 +150,12 @@ export const iframeScript = `
               }
             });
 
+            // Restore neutralized scripts
+            docClone.querySelectorAll('script[data-original-type]').forEach(function(s) {
+              s.setAttribute('type', s.getAttribute('data-original-type'));
+              s.removeAttribute('data-original-type');
+            });
+
             var cleanHtml = '<!DOCTYPE html>\\n' + docClone.outerHTML;
             
             window.parent.postMessage({

@@ -34,110 +34,74 @@ const App = () => {
   const [previewTimestamp, setPreviewTimestamp] = useState(Date.now());
   const [previewViewMode, setPreviewViewMode] = useState('desktop');
   const [cloneUrl, setCloneUrl] = useState('');
+  const [currentS3Url, setCurrentS3Url] = useState(null);
 
 
 
   const handleGenerate = async () => {
-    if (!htmlInput && !cloneUrl) {
-      setError("Por favor, ingresa una URL a clonar o pega el código HTML de origen.");
-      return;
-    }
-
-    if (htmlInput && cloneUrl) {
-      setError("Por favor, rellena solo un campo: URL a Clonar O el HTML fuente, no ambos.");
+    if (!cloneUrl) {
+      setError("Por favor, ingresa una URL a clonar.");
       return;
     }
 
     setIsGenerating(true);
     setError(null);
 
-    let finalHtmlInput = htmlInput;
-
     try {
-      if (cloneUrl) {
-        const fetchUrlResponse = await fetch('http://127.0.0.1:5000/api/extract-origin-html', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: cloneUrl })
-        });
-        
-        if (!fetchUrlResponse.ok) {
-           throw new Error(`Error ${fetchUrlResponse.status} extrayendo HTML de la URL.`);
-        }
+      // 1. Llamar a la nueva API REST
+      const response = await fetch('http://localhost:3000/api/clone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: cloneUrl,
+          bucket: "pulpo-landing-demo-9c9676"
+        })
+      });
 
-        const urlData = await fetchUrlResponse.json();
-        if (urlData.html) {
-          finalHtmlInput = urlData.html;
-          setHtmlInput(finalHtmlInput);
-          setCloneUrl(''); // Limpiamos para que el siguiente clic use la lógica de HTML directo.
-        } else {
-          throw new Error('La respuesta de extracción no contiene HTML válido.');
-        }
+      const data = await response.json();
+      
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'La API devolvió un error.');
       }
+
+      const s3Url = data.s3Url;
+      console.log('✅ URL generada:', s3Url);
+
+      // 2. Descargar el HTML crudo para el editor WYSIWYG
+      const htmlResponse = await fetch(`/api/proxy-html?url=${encodeURIComponent(s3Url)}`);
+      if (!htmlResponse.ok) {
+        throw new Error(`No se pudo descargar el HTML desde el proxy (${htmlResponse.status})`);
+      }
+      const rawHtml = await htmlResponse.text();
+
+      // 3. Guardar el HTML generado en el estado local
+      setCurrentS3Url(s3Url);
+      setGeneratedHtml(rawHtml);
+      setHasClonedHtml(true); 
+      setPreviewTimestamp(Date.now());
+
+      // 4. Alimentar el editor WYSIWYG (neutralizando scripts temporalmente para evitar crashes)
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(rawHtml, "text/html");
+      doc.querySelectorAll("script").forEach(s => {
+        s.setAttribute("data-original-type", s.type || "text/javascript");
+        s.type = "javascript/blocked";
+      });
+      const safeHtmlForEditor = "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
+      
+      useEditorStore.getState().setHtmlContent(injectEditorBridge(safeHtmlForEditor));
+      useEditorStore.getState().setFileHandle(null);
+
+      // 5. Cambiar a la pestaña de editor para edición inmediata
+      setActiveTab('editor');
+      setEditorMode(true);
+      
     } catch (err) {
       console.error(err);
-      setError(err.message || "Error extrayendo URL a clonar.");
+      setError("Error en la generación: " + err.message);
+    } finally {
       setIsGenerating(false);
-      return;
     }
-
-    let retries = 0;
-    const maxRetries = 5;
-
-    const callApi = async () => {
-      try {
-        const response = await fetch('/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            htmlInput: finalHtmlInput,
-            productName,
-            targetCurrency
-          })
-        });
-
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'API request failed');
-        
-        // 1. Guardar el HTML generado por la IA en el estado local
-        setGeneratedHtml(data.html);
-
-        // 2. Persistir el HTML en S3 mediante el endpoint /api/upload
-        try {
-          await uploadHtmlToS3(data.html);
-          
-          // 3. Solo si la subida fue exitosa, habilitamos el modo CloudFront
-          setHasClonedHtml(true); 
-          setPreviewTimestamp(Date.now());
-          
-          console.log('✅ HTML persistido exitosamente en S3.');
-        } catch (uploadErr) {
-          console.error('❌ Error al persistir HTML inicial en S3:', uploadErr);
-          // Opcional: Podríamos dejar hasClonedHtml en false para que el fallback srcDoc funcione
-        }
-
-        // 4. Alimentar el editor WYSIWYG
-        useEditorStore.getState().setHtmlContent(injectEditorBridge(data.html));
-        useEditorStore.getState().setFileHandle(null);
-
-        // 5. Cambiar a la pestaña de editor para edición inmediata
-        setActiveTab('editor');
-        setEditorMode(true);
-      } catch (err) {
-        if (retries < maxRetries) {
-          retries++;
-          const delay = Math.pow(2, retries) * 1000;
-          await new Promise(resolve => setTimeout(resolve, delay));
-          return callApi();
-        }
-        console.error(err);
-        setError("Error en la generación. Verifica el código fuente o intenta de nuevo.");
-      } finally {
-        setIsGenerating(false);
-      }
-    };
-
-    callApi();
   };
 
   const downloadHtml = () => {
@@ -250,17 +214,7 @@ const App = () => {
                 />
               </div>
 
-              <div className="space-y-1.5 flex-1 flex flex-col min-h-0">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                  <Code2 className="w-3 h-3 text-purple-400" /> Pegar HTML Fuente (Ctrl + V)
-                </label>
-                <textarea 
-                  value={htmlInput}
-                  onChange={(e) => setHtmlInput(e.target.value)}
-                  className="flex-1 w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs font-mono focus:ring-2 focus:ring-purple-500 outline-none transition-all resize-none leading-relaxed"
-                  placeholder="<html> ... </html>"
-                />
-              </div>
+              {/* El área de "Pegar HTML" ha sido removida según los requerimientos */}
 
               <button 
                 onClick={handleGenerate}
@@ -353,7 +307,7 @@ const App = () => {
                 <div className={`flex-1 overflow-hidden transition-colors duration-300 ${previewViewMode === 'mobile' ? 'flex justify-center bg-[#e2e8f0]' : ''}`}>
                   <iframe 
                     key={previewTimestamp}
-                    src={hasClonedHtml ? `https://pulpo-landing-demo-9c9676.s3.us-east-1.amazonaws.com/index.html?v=${previewTimestamp}` : undefined}
+                    src={hasClonedHtml && currentS3Url ? `${currentS3Url}?v=${previewTimestamp}` : undefined}
                     srcDoc={!hasClonedHtml ? generatedHtml : undefined}
                     className={`transition-all duration-300 bg-white ${previewViewMode === 'mobile' ? 'w-[400px] h-full shadow-lg border-x border-slate-300' : 'w-full h-full border-none'}`}
                     title="Preview"

@@ -33,7 +33,8 @@ RULES:
 3. IMÁGENES: Keep all original <img src="..."> URLs. Do not remove them. If relative path is used, the adjust it to be absolute. E.g. this: <img src="/assets/ebook-cover-CjC6MyiB.png" alt="E-book 50 Atividades para TDAH"> needs to be <img src="https://tdah2.exercitandoocerebro.com/assets/ebook-cover-CjC6MyiB.png/assets/ebook-cover-CjC6MyiB.png" alt="E-book 50 Atividades para TDAH"> where https://tdah2.exercitandoocerebro.com/ is the url root
 4. REBRANDING: The new product name is "${productName}". Replace the old product name everywhere.
 5. PRECIO: Convert all prices mentioned to ${targetCurrency} amounts.
-6. OUTPUT: Return ONLY the complete, valid HTML code starting with <!DOCTYPE html>. No explanations, no markdown blocks.`;
+6. OUTPUT: Return ONLY the complete, valid HTML code starting with <!DOCTYPE html>. No explanations, no markdown blocks.
+7. EVITAR: Cualquier ventana popup sobre consentimientos de cookies, de suscripción a newsletter, de solicitud de permisos de notificación. No modelar estos popup windows.`;
 
   const userQuery = `Transform this landing page code to Spanish for "${productName}" and ensure all styles are preserved: \n\n ${htmlInput}`;
 
@@ -71,6 +72,21 @@ RULES:
   } catch (error) {
     console.error('Error al contactar Gemini API:', error.message);
     res.status(500).json({ error: 'Error interno en la generación.' });
+  }
+});
+
+// Proxy endpoint to bypass CORS for S3 HTML fetch
+app.get('/api/proxy-html', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).send('URL is required');
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const html = await response.text();
+    res.send(html);
+  } catch (error) {
+    console.error('Proxy fetch error:', error);
+    res.status(500).send('Failed to fetch HTML');
   }
 });
 
