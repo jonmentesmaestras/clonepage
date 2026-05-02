@@ -66,7 +66,7 @@ export const iframeScript = `
             htmlContent: target.innerHTML || '',
             width: target.getAttribute('width') || target.style.width || '',
             height: target.getAttribute('height') || target.style.height || '',
-            src: target.tagName === 'IMG' ? target.getAttribute('src') : ''
+            src: target.tagName === 'IMG' ? target.src : ''
           }
         }, '*');
       }, true);
