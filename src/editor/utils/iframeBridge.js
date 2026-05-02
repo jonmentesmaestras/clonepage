@@ -160,7 +160,7 @@ export const iframeScript = `
             // Limpiar clases translated-* y estilos inline de Google
             [docClone, docClone.querySelector('body')].forEach(function(el) {
               if (el) {
-                el.className = (el.className || '').replace(/translated-\\w+/g, '').trim();
+                el.className = (el.className || '').replace(/translated-\w+/g, '').trim();
                 el.removeAttribute('style');
               }
             });
@@ -208,11 +208,33 @@ export const iframeScript = `
           if (!document.querySelector('script[src*="translate_a/element.js"]')) {
             var gtScript = document.createElement('script');
             gtScript.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+            gtScript.onerror = function() {
+              window.parent.postMessage({ type: 'TRANSLATION_FAILED', reason: 'script_load_error' }, '*');
+            };
             document.head.appendChild(gtScript);
+          } else {
+            // Script ya existía, reinicializar
+            if (window.google && window.google.translate) {
+              window.googleTranslateElementInit();
+            }
           }
 
+          // Timeout global de seguridad: 30 segundos máximo
+          var globalTimeout = setTimeout(function() {
+            window.parent.postMessage({ type: 'TRANSLATION_FAILED', reason: 'timeout' }, '*');
+          }, 30000);
+
           // Polling para forzar el idioma una vez que el select esté disponible
+          var comboAttempts = 0;
           var checkInterval = setInterval(function() {
+            comboAttempts++;
+            // Timeout para el combo: 15 segundos
+            if (comboAttempts > 30) {
+              clearInterval(checkInterval);
+              clearTimeout(globalTimeout);
+              window.parent.postMessage({ type: 'TRANSLATION_FAILED', reason: 'widget_not_loaded' }, '*');
+              return;
+            }
             var select = document.querySelector('.goog-te-combo');
             if (select) {
               select.value = targetLang;
@@ -220,12 +242,25 @@ export const iframeScript = `
               clearInterval(checkInterval);
               
               // Polling para detectar cuando la traducción ha finalizado
+              var finishAttempts = 0;
               var finishInterval = setInterval(function() {
+                finishAttempts++;
                 var htmlEl = document.documentElement;
                 var bodyEl = document.body;
-                if (htmlEl.classList.contains('translated-ltr') || bodyEl.classList.contains('translated-ltr')) {
+                // Detección primaria: clase translated-ltr
+                var hasClass = htmlEl.classList.contains('translated-ltr') || bodyEl.classList.contains('translated-ltr');
+                // Detección alternativa: Google Translate inyecta <font> tags
+                var hasFontTags = document.querySelector('font.notranslate') || document.querySelectorAll('font[style]').length > 3;
+                
+                if (hasClass || hasFontTags) {
                   clearInterval(finishInterval);
+                  clearTimeout(globalTimeout);
                   window.parent.postMessage({ type: 'TRANSLATION_COMPLETE' }, '*');
+                } else if (finishAttempts > 40) {
+                  // 20 segundos esperando traducción
+                  clearInterval(finishInterval);
+                  clearTimeout(globalTimeout);
+                  window.parent.postMessage({ type: 'TRANSLATION_FAILED', reason: 'translation_timeout' }, '*');
                 }
               }, 500);
             }

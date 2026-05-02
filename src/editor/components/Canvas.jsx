@@ -35,6 +35,12 @@ export default function Canvas() {
         useEditorStore.getState().setIsTranslated(true);
       }
       
+      if (event.data?.type === 'TRANSLATION_FAILED') {
+        console.warn('⚠️ Traducción falló:', event.data.reason);
+        useEditorStore.getState().setIsTranslating(false);
+        useEditorStore.getState().setIsTranslated(false);
+      }
+      
       if (event.data?.type === 'SAVE_CLEAN_HTML') {
         const cleanHtml = event.data.payload;
         const { setIsSaving, setSaveProgress } = useEditorStore.getState();
