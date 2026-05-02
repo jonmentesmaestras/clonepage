@@ -156,6 +156,12 @@ export const iframeScript = `
               s.removeAttribute('data-original-type');
             });
 
+            // Restore original base href if it was modified for the editor
+            docClone.querySelectorAll('base[data-original-href]').forEach(function(b) {
+              b.setAttribute('href', b.getAttribute('data-original-href'));
+              b.removeAttribute('data-original-href');
+            });
+
             var cleanHtml = '<!DOCTYPE html>\\n' + docClone.outerHTML;
             
             window.parent.postMessage({

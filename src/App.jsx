@@ -64,18 +64,34 @@ const App = () => {
         throw new Error(data.error || 'La API devolvió un error.');
       }
 
-      const s3Url = data.s3Url;
-      console.log('✅ URL generada:', s3Url);
+      const originalS3Url = data.s3Url;
+      console.log('✅ URL generada (original):', originalS3Url);
 
-      // 2. Descargar el HTML crudo para el editor WYSIWYG
-      const htmlResponse = await fetch(`/api/proxy-html?url=${encodeURIComponent(s3Url)}`);
+      // 2. Iniciar traducción de la URL clonada
+      console.log('⏳ Iniciando traducción automática...');
+      const translateRes = await fetch('/api/translate-clone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ s3Url: originalS3Url })
+      });
+
+      const translateData = await translateRes.json();
+      if (!translateRes.ok || !translateData.success) {
+        throw new Error(translateData.error || 'Falló la traducción automática.');
+      }
+      
+      const finalS3Url = translateData.s3Url;
+      console.log('✅ URL traducida y subida a S3:', finalS3Url);
+
+      // 3. Descargar el HTML crudo para el editor WYSIWYG
+      const htmlResponse = await fetch(`/api/proxy-html?url=${encodeURIComponent(finalS3Url)}`);
       if (!htmlResponse.ok) {
         throw new Error(`No se pudo descargar el HTML desde el proxy (${htmlResponse.status})`);
       }
       const rawHtml = await htmlResponse.text();
 
-      // 3. Guardar el HTML generado en el estado local
-      setCurrentS3Url(s3Url);
+      // 4. Guardar el HTML generado en el estado local
+      setCurrentS3Url(finalS3Url);
       setGeneratedHtml(rawHtml);
       setHasClonedHtml(true); 
       setPreviewTimestamp(Date.now());
@@ -87,6 +103,26 @@ const App = () => {
         s.setAttribute("data-original-type", s.type || "text/javascript");
         s.type = "javascript/blocked";
       });
+
+      // Inyectar tag <base> para que el iframe (srcDoc) resuelva correctamente CSS y assets relativos
+      if (finalS3Url) {
+        const s3BaseUrl = new URL('.', finalS3Url).href;
+        let baseTag = doc.querySelector('base');
+        if (baseTag) {
+          // Si ya existe, guardamos su valor original para restaurarlo después
+          baseTag.setAttribute('data-original-href', baseTag.getAttribute('href') || '');
+          baseTag.setAttribute('href', s3BaseUrl);
+        } else {
+          // Si no existe, creamos uno nuevo temporal
+          baseTag = doc.createElement('base');
+          baseTag.setAttribute('href', s3BaseUrl);
+          baseTag.setAttribute('data-bridge', 'base-url');
+          if (doc.head) {
+            doc.head.insertBefore(baseTag, doc.head.firstChild);
+          }
+        }
+      }
+
       const safeHtmlForEditor = "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
       
       useEditorStore.getState().setHtmlContent(injectEditorBridge(safeHtmlForEditor));

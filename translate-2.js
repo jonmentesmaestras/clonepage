@@ -60,7 +60,7 @@ import { fileURLToPath } from 'url';
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const args = process.argv.slice(2);
     if (args.length < 2) {
-        console.error("Uso: node translate.js input.html output.html");
+        console.error("Uso: node translate-2.js input.html output.html");
         process.exit(1);
     }
     translateHTML(args[0], args[1]);

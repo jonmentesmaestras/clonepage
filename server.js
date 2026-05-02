@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
+import { translateHTML } from './translate.js';
 
 dotenv.config();
 
@@ -90,6 +92,76 @@ app.get('/api/proxy-html', async (req, res) => {
   }
 });
 
+// Automated S3 clone translation endpoint
+app.post('/api/translate-clone', async (req, res) => {
+  req.setTimeout(600000);
+  res.setTimeout(600000);
+  const { s3Url } = req.body;
+  if (!s3Url) return res.status(400).json({ error: 's3Url is required' });
+
+  try {
+    // 1. Extract bucket path logic
+    // s3Url example: https://pulpo-landing-demo-9c9676.s3.us-east-1.amazonaws.com/clones/8c089113a64b3d0e/index.html
+    const urlObj = new URL(s3Url);
+    // urlObj.pathname will be /clones/8c089113a64b3d0e/index.html
+    const keyParts = urlObj.pathname.split('/'); // ['', 'clones', '8c089113a64b3d0e', 'index.html']
+    keyParts.pop(); // Remove index.html
+    const basePath = keyParts.filter(Boolean).join('/'); // 'clones/8c089113a64b3d0e'
+    const targetKey = basePath ? `${basePath}/index-es.html` : 'index-es.html';
+
+    // 2. Ensure temp directory exists
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir);
+    }
+
+    const inputPath = path.join(tempDir, 'index.html');
+    const outputPath = path.join(tempDir, 'index-es.html');
+
+    // 3. Download HTML
+    console.log(`[Translate] Descargando ${s3Url}...`);
+    const downloadRes = await fetch(s3Url);
+    if (!downloadRes.ok) throw new Error('No se pudo descargar el archivo de S3');
+    const rawHtml = await downloadRes.text();
+    fs.writeFileSync(inputPath, rawHtml);
+
+    // 4. Translate using translate.js
+    console.log(`[Translate] Traduciendo archivo local...`);
+    await translateHTML(inputPath, outputPath);
+
+    // 5. Read translated file
+    console.log(`[Translate] Subiendo a S3...`);
+    const translatedHtml = fs.readFileSync(outputPath, 'utf-8');
+
+    // 6. Upload back to S3 using existing FastAPI service
+    const uploadPayload = {
+      bucket_name: "pulpo-landing-demo-9c9676",
+      key: targetKey,
+      html: translatedHtml
+    };
+
+    const uploadRes = await fetch('http://127.0.0.1:5000/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(uploadPayload)
+    });
+
+    if (!uploadRes.ok) {
+      const err = await uploadRes.json();
+      throw new Error(err.error || 'Failed to upload translated HTML');
+    }
+
+    const uploadData = await uploadRes.json();
+    const finalS3Url = `https://${uploadData.bucket_name}.s3.us-east-1.amazonaws.com/${uploadData.key}`;
+    console.log(`[Translate] Finalizado: ${finalS3Url}`);
+
+    res.json({ success: true, s3Url: finalS3Url });
+
+  } catch (error) {
+    console.error('[Translate] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 // Production: Serve static UI files from /dist
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'dist')));
