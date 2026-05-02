@@ -1,4 +1,14 @@
-# Tareas: Inicio de la AplicaciÃ³n
+# Tareas: Inicio de la Aplicación (Sesión Actual)
+
+- [x] Iniciar el servidor de desarrollo (backend y frontend) usando `npm run dev`.
+- [x] Verificar que el backend esté respondiendo en http://localhost:3001.
+- [x] Verificar que el frontend esté accesible en http://localhost:5173.
+- [x] Abrir el navegador y mostrar la aplicación al usuario.
+
+## Notas
+- El comando `npm run dev` utiliza `concurrently` para lanzar `server.js` y `vite` simultáneamente.
+
+# Tareas: Inicio de la Aplicación (Anteriores)
 
 - [x] Iniciar el servidor de desarrollo (backend y frontend) usando `npm run dev`.
 - [x] Verificar que la aplicación esté accesible en el navegador.
@@ -15,4 +25,3 @@
 - [x] Optimizar translate.js para ejecutar lotes concurrentes (concurrencia=10).
 - [x] Aumentar timeout en server.js (req/res) a 10 minutos.
 - [x] Aumentar timeout en proxy de vite.config.js a 10 minutos.
-

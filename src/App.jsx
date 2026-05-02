@@ -54,39 +54,23 @@ const App = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url: cloneUrl,
-          bucket: "pulpo-landing-demo-9c9676"
+          bucketName: "pulpo-landing-demo-9c9676"
         })
       });
 
       const data = await response.json();
       
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'La API devolvió un error.');
+        throw new Error(data.message || data.error || 'La API devolvió un error.');
       }
 
-      const originalS3Url = data.s3Url;
-      console.log('✅ URL generada (original):', originalS3Url);
+      const finalS3Url = data.s3Url;
+      console.log('✅ Clonación exitosa. URL en S3:', finalS3Url);
 
-      // 2. Iniciar traducción de la URL clonada
-      console.log('⏳ Iniciando traducción automática...');
-      const translateRes = await fetch('/api/translate-clone', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ s3Url: originalS3Url })
-      });
-
-      const translateData = await translateRes.json();
-      if (!translateRes.ok || !translateData.success) {
-        throw new Error(translateData.error || 'Falló la traducción automática.');
-      }
-      
-      const finalS3Url = translateData.s3Url;
-      console.log('✅ URL traducida y subida a S3:', finalS3Url);
-
-      // 3. Descargar el HTML crudo para el editor WYSIWYG
-      const htmlResponse = await fetch(`/api/proxy-html?url=${encodeURIComponent(finalS3Url)}`);
+      // 2. Descargar el HTML crudo desde S3 para el editor WYSIWYG
+      const htmlResponse = await fetch(finalS3Url);
       if (!htmlResponse.ok) {
-        throw new Error(`No se pudo descargar el HTML desde el proxy (${htmlResponse.status})`);
+        throw new Error(`No se pudo descargar el HTML desde S3 (${htmlResponse.status})`);
       }
       const rawHtml = await htmlResponse.text();
 

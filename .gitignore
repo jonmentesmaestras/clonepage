@@ -29,3 +29,6 @@ dist-ssr
 # Backups and screenshots
 _backup/
 *.png
+
+# Temporary files
+temp/
