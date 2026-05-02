@@ -150,6 +150,21 @@ export const iframeScript = `
               }
             });
 
+            // Limpiar artefactos de Google Translate
+            docClone.querySelectorAll('#google_translate_element, .goog-te-banner-frame, .skiptranslate, #goog-gt-tt, .goog-te-spinner-pos, iframe.goog-te-menu-frame, .goog-te-menu-value').forEach(function(el) { el.remove(); });
+            docClone.querySelectorAll('script[src*="translate.google"], script[src*="element.js"]').forEach(function(el) { el.remove(); });
+            docClone.querySelectorAll('style').forEach(function(s) {
+              if (s.textContent.includes('.goog-te') || s.textContent.includes('translated')) s.remove();
+            });
+            
+            // Limpiar clases translated-* y estilos inline de Google
+            [docClone, docClone.querySelector('body')].forEach(function(el) {
+              if (el) {
+                el.className = (el.className || '').replace(/translated-\\w+/g, '').trim();
+                el.removeAttribute('style');
+              }
+            });
+
             // Restore neutralized scripts
             docClone.querySelectorAll('script[data-original-type]').forEach(function(s) {
               s.setAttribute('type', s.getAttribute('data-original-type'));
@@ -169,6 +184,52 @@ export const iframeScript = `
               payload: cleanHtml
             }, '*');
           }
+        } else if (data.type === 'TRANSLATE_PAGE') {
+          var targetLang = data.lang || 'es';
+          
+          // Crear contenedor oculto si no existe
+          if (!document.getElementById('google_translate_element')) {
+            var gtDiv = document.createElement('div');
+            gtDiv.id = 'google_translate_element';
+            gtDiv.style.display = 'none';
+            document.body.appendChild(gtDiv);
+          }
+
+          // Definir función de inicialización
+          window.googleTranslateElementInit = function() {
+            new window.google.translate.TranslateElement({
+              pageLanguage: 'auto',
+              includedLanguages: targetLang,
+              autoDisplay: false
+            }, 'google_translate_element');
+          };
+
+          // Inyectar script del widget si no existe
+          if (!document.querySelector('script[src*="translate_a/element.js"]')) {
+            var gtScript = document.createElement('script');
+            gtScript.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+            document.head.appendChild(gtScript);
+          }
+
+          // Polling para forzar el idioma una vez que el select esté disponible
+          var checkInterval = setInterval(function() {
+            var select = document.querySelector('.goog-te-combo');
+            if (select) {
+              select.value = targetLang;
+              select.dispatchEvent(new Event('change'));
+              clearInterval(checkInterval);
+              
+              // Polling para detectar cuando la traducción ha finalizado
+              var finishInterval = setInterval(function() {
+                var htmlEl = document.documentElement;
+                var bodyEl = document.body;
+                if (htmlEl.classList.contains('translated-ltr') || bodyEl.classList.contains('translated-ltr')) {
+                  clearInterval(finishInterval);
+                  window.parent.postMessage({ type: 'TRANSLATION_COMPLETE' }, '*');
+                }
+              }, 500);
+            }
+          }, 500);
         }
       });
     }

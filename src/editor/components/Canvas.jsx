@@ -30,6 +30,11 @@ export default function Canvas() {
         setSelectedElement(event.data.payload);
       }
       
+      if (event.data?.type === 'TRANSLATION_COMPLETE') {
+        useEditorStore.getState().setIsTranslating(false);
+        useEditorStore.getState().setIsTranslated(true);
+      }
+      
       if (event.data?.type === 'SAVE_CLEAN_HTML') {
         const cleanHtml = event.data.payload;
         const { setIsSaving, setSaveProgress } = useEditorStore.getState();

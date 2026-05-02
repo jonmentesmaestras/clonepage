@@ -1,10 +1,10 @@
 import { useEditorStore } from './store/useEditorStore';
 import Sidebar from './components/Sidebar';
 import Canvas from './components/Canvas';
-import { PanelLeftClose, PanelLeft } from 'lucide-react';
+import { PanelLeftClose, PanelLeft, Globe, Loader2 } from 'lucide-react';
 
 export default function EditorPanel() {
-  const { sidebarOpen, toggleSidebar } = useEditorStore();
+  const { sidebarOpen, toggleSidebar, isTranslating, isTranslated, setIsTranslating } = useEditorStore();
 
   return (
     <div className="flex w-full h-full bg-gray-50 overflow-hidden font-sans">
@@ -29,6 +29,21 @@ export default function EditorPanel() {
             {sidebarOpen ? <PanelLeftClose size={20}/> : <PanelLeft size={20}/>}
           </button>
           <span className="ml-4 font-semibold text-gray-700">WYSIWYG Editor</span>
+          <button
+            onClick={() => {
+              setIsTranslating(true);
+              window.__EDITOR_IFRAME_REF?.current?.contentWindow.postMessage(
+                { type: 'TRANSLATE_PAGE', lang: 'es' }, '*'
+              );
+            }}
+            disabled={isTranslating || isTranslated}
+            className={`ml-auto flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              isTranslated ? 'bg-green-100 text-green-700' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            {isTranslating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
+            {isTranslated ? '✅ Traducido' : isTranslating ? 'Traduciendo...' : '🌐 Traducir a Español'}
+          </button>
         </div>
 
         {/* Canvas Background Space */}
