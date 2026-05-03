@@ -1,27 +1,7 @@
-# Tareas: Inicio de la Aplicación (Sesión Actual)
+- [x] Modificar EditorPanel.jsx con el botón "💾 Guardar Traducción" y la lógica de limpieza ultra-conservadora.
+- [x] Verificar que el guardado manual refresca el editor y elimina la barra de Google Translate.
+- [x] Confirmar que la vista previa se actualiza correctamente tras el guardado.
+- [x] Validar que los estilos originales (inline styles) permanecen intactos.
 
-- [x] Iniciar el servidor de desarrollo (backend y frontend) usando `npm run dev`.
-- [x] Verificar que el backend esté respondiendo en http://localhost:3001.
-- [x] Verificar que el frontend esté accesible en http://localhost:5173.
-- [x] Abrir el navegador y mostrar la aplicación al usuario.
-
-## Notas
-- El comando `npm run dev` utiliza `concurrently` para lanzar `server.js` y `vite` simultáneamente.
-
-# Tareas: Inicio de la Aplicación (Anteriores)
-
-- [x] Iniciar el servidor de desarrollo (backend y frontend) usando `npm run dev`.
-- [x] Verificar que la aplicación esté accesible en el navegador.
-
-## Notas
-- El comando `npm run dev` utiliza `concurrently` para lanzar `server.js` y `vite` simultáneamente.
-
-## Revisión Final
-- [x] Backend iniciado en http://localhost:3001
-- [x] Frontend iniciado en http://localhost:5173
-- [x] UI verificada mediante subagente de navegación.
-
-# Tareas: Solución Timeout Traducción
-- [x] Optimizar translate.js para ejecutar lotes concurrentes (concurrencia=10).
-- [x] Aumentar timeout en server.js (req/res) a 10 minutos.
-- [x] Aumentar timeout en proxy de vite.config.js a 10 minutos.
+### Revisión Final
+El flujo de guardado manual implementado en el Plan v2 permite liberar el editor del "secuestro" de Google Translate sin corromper el HTML original. La limpieza ultra-conservadora respeta los estilos inline y las rutas de assets, garantizando que la landing page traducida sea 100% funcional y editable.

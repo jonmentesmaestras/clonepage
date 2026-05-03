@@ -51,10 +51,28 @@ export default function Canvas() {
           
           await uploadHtmlToS3(cleanHtml);
           
-          // Guardar el código más reciente en el estado global (memoria)
-          // para cuando el usuario cambie de pestañas entre "Editor" y "Vista Previa".
-          // Al usar Zustand de esta manera, actualiza la memoria sin obligar al iframe a recargar su 'srcDoc'
-          useEditorStore.getState().setHtmlContent(injectEditorBridge(cleanHtml));
+          // Re-preparar HTML para el Editor (bloquear scripts + base S3)
+          const parser = new DOMParser();
+          const editorDoc = parser.parseFromString(cleanHtml, 'text/html');
+          
+          editorDoc.querySelectorAll('script').forEach(s => {
+            s.setAttribute('data-original-type', s.type || 'text/javascript');
+            s.type = 'javascript/blocked';
+          });
+
+          // Recuperar la base actual (que apunta a S3) para mantenerla en el editor
+          const currentBaseHref = iframeRef.current?.contentDocument?.querySelector('base')?.getAttribute('href') || '';
+          let baseTag = editorDoc.querySelector('base');
+          if (baseTag && currentBaseHref) {
+            baseTag.setAttribute('data-original-href', baseTag.getAttribute('href') || '');
+            baseTag.setAttribute('href', currentBaseHref);
+          }
+
+          const editorHtml = '<!DOCTYPE html>\n' + editorDoc.documentElement.outerHTML;
+          useEditorStore.getState().setHtmlContent(injectEditorBridge(editorHtml));
+          
+          // Forzar refresco de vista previa
+          window.dispatchEvent(new CustomEvent('preview-refresh'));
           
           setSaveProgress(100); // Éxito
           setTimeout(() => {

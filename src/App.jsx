@@ -36,6 +36,13 @@ const App = () => {
   const [cloneUrl, setCloneUrl] = useState('');
   const [currentS3Url, setCurrentS3Url] = useState(null);
 
+  // Listener para refrescar la vista previa desde otros componentes (ej. post-traducción)
+  useEffect(() => {
+    const handler = () => setPreviewTimestamp(Date.now());
+    window.addEventListener('preview-refresh', handler);
+    return () => window.removeEventListener('preview-refresh', handler);
+  }, []);
+
 
 
   const handleGenerate = async () => {
