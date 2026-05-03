@@ -3,11 +3,10 @@
  * @param {string} html - The cleaned HTML string to persist.
  * @returns {Promise<Response>}
  */
-export const uploadHtmlToS3 = async (html) => {
+export const uploadHtmlToS3 = async (html, key = "index.html") => {
   const payload = {
     bucket_name: "pulpo-landing-demo-9c9676",
-
-    key: "index.html",
+    key: key,
     html: html
   };
 

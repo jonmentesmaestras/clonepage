@@ -49,7 +49,22 @@ export default function Canvas() {
           setIsSaving(true);
           setSaveProgress(30); // Inicio de proceso
           
-          await uploadHtmlToS3(cleanHtml);
+          // Recuperar la base actual (que apunta a S3) para mantenerla en el editor y para el key
+          const currentBaseHref = iframeRef.current?.contentDocument?.querySelector('base')?.getAttribute('href') || '';
+
+          // Extraer el key de S3 desde la base actual (ej: /clones/abc/ -> clones/abc/index.html)
+          let s3Key = "index.html";
+          try {
+            if (currentBaseHref && currentBaseHref.includes('.amazonaws.com/')) {
+              const url = new URL(currentBaseHref);
+              s3Key = url.pathname.replace(/^\//, '') + "index.html";
+              s3Key = s3Key.replace(/\/\/+/g, '/'); // Limpiar dobles barras
+            }
+          } catch (e) {
+            console.error("Error parsing S3 key:", e);
+          }
+
+          await uploadHtmlToS3(cleanHtml, s3Key);
           
           // Re-preparar HTML para el Editor (bloquear scripts + base S3)
           const parser = new DOMParser();
@@ -60,8 +75,6 @@ export default function Canvas() {
             s.type = 'javascript/blocked';
           });
 
-          // Recuperar la base actual (que apunta a S3) para mantenerla en el editor
-          const currentBaseHref = iframeRef.current?.contentDocument?.querySelector('base')?.getAttribute('href') || '';
           let baseTag = editorDoc.querySelector('base');
           if (baseTag && currentBaseHref) {
             baseTag.setAttribute('data-original-href', baseTag.getAttribute('href') || '');
