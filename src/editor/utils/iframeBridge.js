@@ -41,6 +41,31 @@ export const iframeScript = `
         return el.getAttribute('data-editor-id');
       }
 
+      // Resolves the most appropriate selectable target (skipping translate artifacts like FONT)
+      function resolveSelectableTarget(node) {
+        var el = node;
+        if (el && el.nodeType === 3) el = el.parentElement; // Text node -> Parent
+        if (!el) return null;
+
+        // Skip bridge artifacts
+        if (el.closest && el.closest('[data-bridge]')) return null;
+
+        // 1. Priority: Images
+        var img = el.closest && el.closest('img');
+        if (img) return img;
+
+        // 2. Priority: Headings
+        var heading = el.closest && el.closest('h1,h2,h3,h4,h5,h6');
+        if (heading) return heading;
+
+        // 3. Priority: Semantic containers (P, DIV, SPAN)
+        // Note: we avoid selecting FONT directly by looking for its supported parents
+        var container = el.closest && el.closest('p,div,span');
+        if (container) return container;
+
+        return el;
+      }
+
       // Reusable function to clean the document for saving/exporting
       // Esta función debe ser ultra-conservadora para no arruinar estilos
       function cleanDocumentForExport() {
@@ -100,12 +125,16 @@ export const iframeScript = `
 
       // Handle click to select element
       document.addEventListener('click', function(e) {
+        var target = resolveSelectableTarget(e.target);
+        
+        // Only prevent default if we actually found a valid target to select
+        // and it's not a link we want to follow (optional - here we block all for editor)
+        if (!target) return;
+
         e.preventDefault();
         e.stopPropagation();
 
-        var target = e.target;
         if (target === document.body || target === document.documentElement) return;
-        if (target.hasAttribute && target.hasAttribute('data-bridge')) return;
 
         var editorId = ensureId(target);
         highlightElement(target);
