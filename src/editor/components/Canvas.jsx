@@ -79,6 +79,12 @@ export default function Canvas() {
           if (baseTag && currentBaseHref) {
             baseTag.setAttribute('data-original-href', baseTag.getAttribute('href') || '');
             baseTag.setAttribute('href', currentBaseHref);
+          } else if (currentBaseHref) {
+            // Si el bridge borró el base (porque era data-bridge), lo re-creamos para el editor
+            baseTag = editorDoc.createElement('base');
+            baseTag.setAttribute('href', currentBaseHref);
+            baseTag.setAttribute('data-bridge', 'base-url');
+            editorDoc.head.insertBefore(baseTag, editorDoc.head.firstChild);
           }
 
           const editorHtml = '<!DOCTYPE html>\n' + editorDoc.documentElement.outerHTML;
