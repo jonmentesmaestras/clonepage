@@ -7,7 +7,7 @@ import { injectEditorBridge } from './utils/iframeBridge';
 import { uploadHtmlToS3 } from '../utils/s3Uploader';
 
 export default function EditorPanel() {
-  const { sidebarOpen, toggleSidebar, isTranslating, isTranslated, setIsTranslating, setHtmlContent } = useEditorStore();
+  const { sidebarOpen, toggleSidebar, isTranslating, isTranslated, setIsTranslating, setHtmlContent, s3HtmlKey } = useEditorStore();
   const [isSavingTranslation, setIsSavingTranslation] = useState(false);
 
   const handleSaveTranslation = async () => {
@@ -81,20 +81,9 @@ export default function EditorPanel() {
       // 6. Serializar HTML para S3
       const cleanHtml = '<!DOCTYPE html>\n' + docClone.outerHTML;
 
-      // 7. Subir a S3 (con el key dinámico correcto)
-      // Extraer el key de S3 desde la base actual (ej: /clones/abc/ -> clones/abc/index.html)
-      let s3Key = "index.html";
-      try {
-        if (currentBaseHref && currentBaseHref.includes('.amazonaws.com/')) {
-          const url = new URL(currentBaseHref);
-          s3Key = url.pathname.replace(/^\//, '') + "index.html";
-          s3Key = s3Key.replace(/\/\/+/g, '/'); // Limpiar dobles barras
-        }
-      } catch (e) {
-        console.error("Error parsing S3 key:", e);
-      }
-      
-      await uploadHtmlToS3(cleanHtml, s3Key);
+      // 7. Subir a S3 usando el key canonico definido en clonación
+      const uploadKey = s3HtmlKey || 'index.html';
+      await uploadHtmlToS3(cleanHtml, uploadKey);
 
       // 8. Re-preparar HTML para el Editor (bloquear scripts + base S3)
       // Esto garantiza que el editor siga viendo los estilos tras el refresco

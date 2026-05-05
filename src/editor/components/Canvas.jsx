@@ -5,7 +5,7 @@ import { UploadCloud, FileEdit, Wand2 } from 'lucide-react';
 import { uploadHtmlToS3 } from '../../utils/s3Uploader';
 
 export default function Canvas() {
-  const { htmlContent, setHtmlContent, setSelectedElement, setFileHandle } = useEditorStore();
+  const { htmlContent, setHtmlContent, setSelectedElement, setFileHandle, setS3HtmlKey } = useEditorStore();
   const iframeRef = useRef(null);
   const prevHtmlRef = useRef(htmlContent);
   
@@ -49,22 +49,12 @@ export default function Canvas() {
           setIsSaving(true);
           setSaveProgress(30); // Inicio de proceso
           
-          // Recuperar la base actual (que apunta a S3) para mantenerla en el editor y para el key
+          // Recuperar la base actual (que apunta a S3) para mantenerla en el editor
           const currentBaseHref = iframeRef.current?.contentDocument?.querySelector('base')?.getAttribute('href') || '';
+          const { s3HtmlKey } = useEditorStore.getState();
+          const uploadKey = s3HtmlKey || 'index.html';
 
-          // Extraer el key de S3 desde la base actual (ej: /clones/abc/ -> clones/abc/index.html)
-          let s3Key = "index.html";
-          try {
-            if (currentBaseHref && currentBaseHref.includes('.amazonaws.com/')) {
-              const url = new URL(currentBaseHref);
-              s3Key = url.pathname.replace(/^\//, '') + "index.html";
-              s3Key = s3Key.replace(/\/\/+/g, '/'); // Limpiar dobles barras
-            }
-          } catch (e) {
-            console.error("Error parsing S3 key:", e);
-          }
-
-          await uploadHtmlToS3(cleanHtml, s3Key);
+          await uploadHtmlToS3(cleanHtml, uploadKey);
           
           // Re-preparar HTML para el Editor (bloquear scripts + base S3)
           const parser = new DOMParser();
@@ -124,6 +114,7 @@ export default function Canvas() {
       });
       
       setFileHandle(handle);
+      setS3HtmlKey(null);
       const file = await handle.getFile();
       const rawContent = await file.text();
       const injected = injectEditorBridge(rawContent);

@@ -73,6 +73,11 @@ const App = () => {
 
       const finalS3Url = data.s3Url;
       console.log('✅ Clonación exitosa. URL en S3:', finalS3Url);
+      const s3HtmlKey = (() => {
+        const url = new URL(finalS3Url);
+        const pathname = url.pathname.replace(/^\/+/, '');
+        return pathname.endsWith('/') ? pathname + 'index.html' : pathname;
+      })();
 
       // 2. Descargar el HTML crudo desde S3 para el editor WYSIWYG
       const htmlResponse = await fetch(finalS3Url);
@@ -115,9 +120,11 @@ const App = () => {
       }
 
       const safeHtmlForEditor = "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
-      
-      useEditorStore.getState().setHtmlContent(injectEditorBridge(safeHtmlForEditor));
-      useEditorStore.getState().setFileHandle(null);
+
+      const editorStore = useEditorStore.getState();
+      editorStore.setS3HtmlKey(s3HtmlKey);
+      editorStore.setHtmlContent(injectEditorBridge(safeHtmlForEditor));
+      editorStore.setFileHandle(null);
 
       // 5. Cambiar a la pestaña de editor para edición inmediata
       setActiveTab('editor');
