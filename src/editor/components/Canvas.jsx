@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import { useEditorStore } from '../store/useEditorStore';
-import { injectEditorBridge } from '../utils/iframeBridge';
+import { injectEditorBridge, prepareHtmlForEditor } from '../utils/iframeBridge';
 import { UploadCloud, FileEdit, Wand2 } from 'lucide-react';
 import { uploadHtmlToS3 } from '../../utils/s3Uploader';
 
@@ -57,27 +57,7 @@ export default function Canvas() {
           await uploadHtmlToS3(cleanHtml, uploadKey);
           
           // Re-preparar HTML para el Editor (bloquear scripts + base S3)
-          const parser = new DOMParser();
-          const editorDoc = parser.parseFromString(cleanHtml, 'text/html');
-          
-          editorDoc.querySelectorAll('script').forEach(s => {
-            s.setAttribute('data-original-type', s.type || 'text/javascript');
-            s.type = 'javascript/blocked';
-          });
-
-          let baseTag = editorDoc.querySelector('base');
-          if (baseTag && currentBaseHref) {
-            baseTag.setAttribute('data-original-href', baseTag.getAttribute('href') || '');
-            baseTag.setAttribute('href', currentBaseHref);
-          } else if (currentBaseHref) {
-            // Si el bridge borró el base (porque era data-bridge), lo re-creamos para el editor
-            baseTag = editorDoc.createElement('base');
-            baseTag.setAttribute('href', currentBaseHref);
-            baseTag.setAttribute('data-bridge', 'base-url');
-            editorDoc.head.insertBefore(baseTag, editorDoc.head.firstChild);
-          }
-
-          const editorHtml = '<!DOCTYPE html>\n' + editorDoc.documentElement.outerHTML;
+          const editorHtml = prepareHtmlForEditor(cleanHtml, currentBaseHref);
           useEditorStore.getState().setHtmlContent(injectEditorBridge(editorHtml));
           
           // Forzar refresco de vista previa

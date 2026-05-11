@@ -305,6 +305,81 @@ export const iframeStyle = `
   </style>
 `;
 
+function getLazyImageSource(img) {
+  const candidates = [
+    'data-lazy-src',
+    'data-src',
+    'data-original',
+    'data-orig-file',
+    'data-medium-file',
+    'data-large-file'
+  ];
+
+  for (const attr of candidates) {
+    const value = img.getAttribute(attr)?.trim();
+    if (value) return value;
+  }
+
+  return '';
+}
+
+function hasPlaceholderImageSrc(src) {
+  if (!src) return true;
+
+  return (
+    src.startsWith('data:image/svg+xml') ||
+    src.startsWith('data:image/gif') ||
+    src === 'about:blank'
+  );
+}
+
+function normalizeLazyLoadedImages(doc) {
+  doc.querySelectorAll('img').forEach((img) => {
+    const currentSrc = img.getAttribute('src')?.trim() || '';
+    const lazySrc = getLazyImageSource(img);
+
+    if (lazySrc && hasPlaceholderImageSrc(currentSrc)) {
+      img.setAttribute('src', lazySrc);
+    }
+
+    const currentSrcSet = img.getAttribute('srcset')?.trim() || '';
+    const lazySrcSet = img.getAttribute('data-srcset')?.trim() || img.getAttribute('data-lazy-srcset')?.trim() || '';
+
+    if (lazySrcSet && !currentSrcSet) {
+      img.setAttribute('srcset', lazySrcSet);
+    }
+  });
+}
+
+export function prepareHtmlForEditor(rawHtml, baseHref = '') {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(rawHtml, 'text/html');
+
+  doc.querySelectorAll('script').forEach((script) => {
+    script.setAttribute('data-original-type', script.type || 'text/javascript');
+    script.type = 'javascript/blocked';
+  });
+
+  normalizeLazyLoadedImages(doc);
+
+  if (baseHref) {
+    let baseTag = doc.querySelector('base');
+    if (baseTag) {
+      baseTag.setAttribute('data-original-href', baseTag.getAttribute('href') || '');
+      baseTag.setAttribute('href', baseHref);
+    } else {
+      baseTag = doc.createElement('base');
+      baseTag.setAttribute('href', baseHref);
+      baseTag.setAttribute('data-bridge', 'base-url');
+      if (doc.head) {
+        doc.head.insertBefore(baseTag, doc.head.firstChild);
+      }
+    }
+  }
+
+  return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+}
+
 /**
  * Inyecta el script y estilos del bridge WYSIWYG en un string HTML raw.
  */

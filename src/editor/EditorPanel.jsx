@@ -3,7 +3,7 @@ import { useEditorStore } from './store/useEditorStore';
 import Sidebar from './components/Sidebar';
 import Canvas from './components/Canvas';
 import { PanelLeftClose, PanelLeft, Globe, Loader2, Save } from 'lucide-react';
-import { injectEditorBridge } from './utils/iframeBridge';
+import { injectEditorBridge, prepareHtmlForEditor } from './utils/iframeBridge';
 import { uploadHtmlToS3 } from '../utils/s3Uploader';
 
 export default function EditorPanel() {
@@ -87,26 +87,7 @@ export default function EditorPanel() {
 
       // 8. Re-preparar HTML para el Editor (bloquear scripts + base S3)
       // Esto garantiza que el editor siga viendo los estilos tras el refresco
-      const parser = new DOMParser();
-      const editorDoc = parser.parseFromString(cleanHtml, 'text/html');
-      
-      editorDoc.querySelectorAll('script').forEach(s => {
-        s.setAttribute('data-original-type', s.type || 'text/javascript');
-        s.type = 'javascript/blocked';
-      });
-
-      let baseTag = editorDoc.querySelector('base');
-      if (baseTag) {
-        baseTag.setAttribute('data-original-href', baseTag.getAttribute('href') || '');
-        baseTag.setAttribute('href', currentBaseHref);
-      } else if (currentBaseHref) {
-        baseTag = editorDoc.createElement('base');
-        baseTag.setAttribute('href', currentBaseHref);
-        baseTag.setAttribute('data-bridge', 'base-url');
-        editorDoc.head.insertBefore(baseTag, editorDoc.head.firstChild);
-      }
-
-      const editorHtml = '<!DOCTYPE html>\n' + editorDoc.documentElement.outerHTML;
+      const editorHtml = prepareHtmlForEditor(cleanHtml, currentBaseHref);
       
       // Actualizar el store -> Canvas.jsx refresca el iframe con el bridge inyectado
       setHtmlContent(injectEditorBridge(editorHtml));

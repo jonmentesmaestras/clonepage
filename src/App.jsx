@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import EditorPanel from './editor/EditorPanel';
+import { injectEditorBridge, prepareHtmlForEditor } from './editor/utils/iframeBridge';
 import { useEditorStore } from './editor/store/useEditorStore';
-import { injectEditorBridge } from './editor/utils/iframeBridge';
 import { uploadHtmlToS3 } from './utils/s3Uploader';
 import { 
   Zap, 
@@ -93,33 +93,8 @@ const App = () => {
       setPreviewTimestamp(Date.now());
 
       // 4. Alimentar el editor WYSIWYG (neutralizando scripts temporalmente para evitar crashes)
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(rawHtml, "text/html");
-      doc.querySelectorAll("script").forEach(s => {
-        s.setAttribute("data-original-type", s.type || "text/javascript");
-        s.type = "javascript/blocked";
-      });
-
-      // Inyectar tag <base> para que el iframe (srcDoc) resuelva correctamente CSS y assets relativos
-      if (finalS3Url) {
-        const s3BaseUrl = new URL('.', finalS3Url).href;
-        let baseTag = doc.querySelector('base');
-        if (baseTag) {
-          // Si ya existe, guardamos su valor original para restaurarlo después
-          baseTag.setAttribute('data-original-href', baseTag.getAttribute('href') || '');
-          baseTag.setAttribute('href', s3BaseUrl);
-        } else {
-          // Si no existe, creamos uno nuevo temporal
-          baseTag = doc.createElement('base');
-          baseTag.setAttribute('href', s3BaseUrl);
-          baseTag.setAttribute('data-bridge', 'base-url');
-          if (doc.head) {
-            doc.head.insertBefore(baseTag, doc.head.firstChild);
-          }
-        }
-      }
-
-      const safeHtmlForEditor = "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
+      const s3BaseUrl = finalS3Url ? new URL('.', finalS3Url).href : '';
+      const safeHtmlForEditor = prepareHtmlForEditor(rawHtml, s3BaseUrl);
 
       const editorStore = useEditorStore.getState();
       editorStore.setS3HtmlKey(s3HtmlKey);
