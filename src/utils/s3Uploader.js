@@ -1,11 +1,15 @@
+import { useEditorStore } from '../editor/store/useEditorStore';
+
 /**
  * Utility to upload HTML content to the backend S3 endpoint.
  * @param {string} html - The cleaned HTML string to persist.
  * @returns {Promise<Response>}
  */
 export const uploadHtmlToS3 = async (html, key = "index.html") => {
+  const { s3BucketName } = useEditorStore.getState();
+  
   const payload = {
-    bucket_name: "pulpo-landing-demo-9c9676",
+    bucket_name: s3BucketName,
     key: key,
     html: html
   };

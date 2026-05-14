@@ -5,10 +5,11 @@ import JoditEditor from 'jodit-react';
 import ImageModal from './ImageModal';
 
 export default function Sidebar() {
-  const { selectedElement, updateElementData, isSaving, saveProgress } = useEditorStore();
+  const { selectedElement, updateElementData, isSaving, saveProgress, isTranslating } = useEditorStore();
   
   // Local state for the form inputs
   const [formData, setFormData] = useState({ text: '', htmlContent: '', tag: '', width: '', height: '', src: '' });
+  const [translateProgress, setTranslateProgress] = useState(0);
   const [accordionOpen, setAccordionOpen] = useState(true);
 
   // Media Modal state
@@ -47,11 +48,12 @@ export default function Sidebar() {
   
     // Lógica de subida de imagen externa
     if (selectedElement.tag === 'IMG' && localImageFile) {
+        const { s3BucketName } = useEditorStore.getState();
         useEditorStore.getState().setIsSaving(true);
         useEditorStore.getState().setSaveProgress(10);
         
         const payload = new FormData();
-        payload.append('bucket_name', 'pulpo-landing-demo-9c9676');
+        payload.append('bucket_name', s3BucketName);
         payload.append('key', localImageFile.name || 'image.png');
         payload.append('image', localImageFile);
         
@@ -93,6 +95,59 @@ export default function Sidebar() {
     updateElementData(finalUpdates);
     
     // El feedback visual de "¡Guardado! ✅" lo manejamos en el render del botón basado en el progreso
+  };
+
+  // Handle translating the selected image via API
+  const handleTranslate = async () => {
+    if (!selectedElement || selectedElement.tag !== 'IMG' || !formData.src) return;
+
+    const { setIsTranslating } = useEditorStore.getState();
+    setIsTranslating(true);
+    setTranslateProgress(10);
+
+    // Simulated progress ticking while waiting for API
+    const progressInterval = setInterval(() => {
+      setTranslateProgress(prev => (prev >= 90 ? 90 : prev + 10));
+    }, 600);
+
+    try {
+      const res = await fetch('http://127.0.0.1:5005/api/translate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: formData.src })
+      });
+      const data = await res.json();
+
+      clearInterval(progressInterval);
+      setTranslateProgress(100);
+
+      if (data.ok && data.upload_response?.image_url) {
+        const newUrl = data.upload_response.image_url + '?t=' + Date.now();
+
+        // Update sidebar preview
+        setFormData(prev => ({ ...prev, src: newUrl }));
+
+        // Update canvas image
+        if (window.__EDITOR_IFRAME_REF?.current) {
+          window.__EDITOR_IFRAME_REF.current.contentWindow.postMessage({
+            type: 'UPDATE_ELEMENT',
+            payload: { id: selectedElement.id, updates: { src: newUrl, persist: false } }
+          }, '*');
+        }
+
+        // Update global store
+        updateElementData({ src: newUrl });
+      } else {
+        throw new Error(data.message || 'La API no devolvió una imagen traducida.');
+      }
+    } catch (e) {
+      clearInterval(progressInterval);
+      console.error('Error traduciendo imagen:', e);
+      alert('Error al traducir la imagen: ' + e.message);
+    } finally {
+      setTranslateProgress(0);
+      useEditorStore.getState().setIsTranslating(false);
+    }
   };
 
   // Live Sync for the Rich Text Editor
@@ -270,6 +325,35 @@ export default function Sidebar() {
                      <Trash2 size={14} />
                    </button>
                  </div>
+
+                  {/* Traducir Button */}
+                  <button
+                    onClick={handleTranslate}
+                    disabled={isTranslating || !formData.src}
+                    className={`w-full flex items-center justify-center gap-2 text-white font-medium py-2 rounded text-sm transition-all duration-300 ${
+                      isTranslating
+                        ? 'bg-blue-400 cursor-not-allowed'
+                        : 'bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed'
+                    }`}
+                  >
+                    {isTranslating ? 'Traduciendo...' : 'Traducir'}
+                  </button>
+
+                  {/* Translation Progress Bar */}
+                  {isTranslating && (
+                    <div>
+                      <div className="flex justify-between text-[10px] font-semibold text-slate-500 mb-1">
+                        <span>Traduciendo imagen...</span>
+                        <span>{translateProgress}%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="bg-blue-500 h-full transition-all duration-500 ease-out"
+                          style={{ width: `${translateProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                  
                  <div className="flex flex-col gap-1">
                    <label className="text-xs font-medium text-gray-500">Ancho (ej: 100%, 200px)</label>

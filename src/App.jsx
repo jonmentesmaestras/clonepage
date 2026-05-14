@@ -35,6 +35,76 @@ const App = () => {
   const [previewViewMode, setPreviewViewMode] = useState('desktop');
   const [cloneUrl, setCloneUrl] = useState('');
   const [currentS3Url, setCurrentS3Url] = useState(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  // Inicialización: Resolver bucket desde el ID del querystring
+  useEffect(() => {
+    const resolveBucket = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+
+      if (!id) {
+        setError("Error crítico: No se encontró el parámetro 'id' en la URL. Contacte a soporte.");
+        setIsInitializing(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`http://localhost:8000/api/v1/landings-buckets?id=${id}`);
+        if (!response.ok) throw new Error(`Error al obtener configuración del bucket (${response.status})`);
+        
+        const responseData = await response.json();
+        // La API devuelve un array, tomamos el primer elemento
+        const data = Array.isArray(responseData) ? responseData[0] : responseData;
+        
+        if (!data || !data.URL_Bucket || !data.URL_s3_final) {
+          throw new Error("La respuesta de la API no contiene 'URL_Bucket' o 'URL_s3_final'");
+        }
+
+        // 1. Guardar metadatos del bucket en el store
+        let bucketUrl = data.URL_Bucket;
+        if (bucketUrl.endsWith('index.html')) {
+          bucketUrl = bucketUrl.replace('index.html', '');
+        }
+        if (!bucketUrl.endsWith('/')) bucketUrl += '/';
+        const bucketName = new URL(bucketUrl).hostname.split('.')[0];
+        useEditorStore.getState().setS3BucketData(bucketUrl, bucketName);
+
+        // 2. Hidratar la aplicación con la URL_s3_final
+        const finalS3Url = data.URL_s3_final;
+        const s3HtmlKey = (() => {
+          const url = new URL(finalS3Url);
+          const pathname = url.pathname.replace(/^\/+/, '');
+          return pathname.endsWith('/') ? pathname + 'index.html' : pathname;
+        })();
+
+        // Descargar el HTML actual para el editor
+        const htmlResponse = await fetch(finalS3Url);
+        if (!htmlResponse.ok) throw new Error(`No se pudo descargar el HTML actual (${htmlResponse.status})`);
+        const rawHtml = await htmlResponse.text();
+
+        // Configurar estados de visualización (Preview y Editor)
+        setCurrentS3Url(finalS3Url);
+        setGeneratedHtml(rawHtml);
+        setHasClonedHtml(true);
+
+        const s3BaseUrl = new URL('.', finalS3Url).href;
+        const safeHtmlForEditor = prepareHtmlForEditor(rawHtml, s3BaseUrl);
+        
+        const editorStore = useEditorStore.getState();
+        editorStore.setS3HtmlKey(s3HtmlKey);
+        editorStore.setHtmlContent(injectEditorBridge(safeHtmlForEditor));
+
+        setIsInitializing(false);
+      } catch (err) {
+        console.error('Error inicializando bucket:', err);
+        setError("Error al cargar la configuración: " + err.message);
+        setIsInitializing(false);
+      }
+    };
+
+    resolveBucket();
+  }, []);
 
   // Listener para refrescar la vista previa desde otros componentes (ej. post-traducción)
   useEffect(() => {
@@ -55,13 +125,15 @@ const App = () => {
     setError(null);
 
     try {
+      const { s3BucketName } = useEditorStore.getState();
+      
       // 1. Llamar a la nueva API REST
-      const response = await fetch('http://localhost:3000/api/clone', {
+      const response = await fetch('http://localhost:3003/api/clone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url: cloneUrl,
-          bucketName: "pulpo-landing-demo-9c9676"
+          bucketName: s3BucketName
         })
       });
 
@@ -71,7 +143,11 @@ const App = () => {
         throw new Error(data.message || data.error || 'La API devolvió un error.');
       }
 
-      const finalS3Url = data.s3Url;
+      const finalS3Url = data.URL_s3_final || data.s3Url;
+      if (!finalS3Url) {
+        throw new Error("No se recibió la URL final de S3 (URL_s3_final) en la respuesta.");
+      }
+
       console.log('✅ Clonación exitosa. URL en S3:', finalS3Url);
       const s3HtmlKey = (() => {
         const url = new URL(finalS3Url);
@@ -133,6 +209,25 @@ const App = () => {
     document.execCommand('copy');
     document.body.removeChild(textArea);
   };
+
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-200">
+        <Loader2 className="w-12 h-12 animate-spin text-purple-500 mb-4" />
+        <p className="text-lg font-medium">Cargando configuración...</p>
+      </div>
+    );
+  }
+
+  if (error && !hasClonedHtml) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-200 p-4 text-center">
+        <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
+        <h1 className="text-2xl font-bold mb-2">Error de Configuración</h1>
+        <p className="text-slate-400 max-w-md">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-purple-500/30">
