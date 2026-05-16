@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useEditorStore } from '../store/useEditorStore';
-import { Edit2, Image as ImageIcon, CheckCircle, ChevronDown, AlignLeft, Trash2 } from 'lucide-react';
+import { Edit2, Image as ImageIcon, CheckCircle, ChevronDown, AlignLeft, Trash2, RotateCcw } from 'lucide-react';
 import JoditEditor from 'jodit-react';
 import ImageModal from './ImageModal';
 
@@ -11,6 +11,12 @@ export default function Sidebar() {
   const [formData, setFormData] = useState({ text: '', htmlContent: '', tag: '', width: '', height: '', src: '' });
   const [translateProgress, setTranslateProgress] = useState(0);
   const [accordionOpen, setAccordionOpen] = useState(true);
+
+  // Slider states for image resizing
+  const [sliderWidth, setSliderWidth] = useState(0);
+  const [sliderHeight, setSliderHeight] = useState(0);
+  const [originalWidth, setOriginalWidth] = useState(0);
+  const [originalHeight, setOriginalHeight] = useState(0);
 
   // Media Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -28,6 +34,16 @@ export default function Sidebar() {
         src: selectedElement.src || ''
       });
       setLocalImageFile(null);
+
+      // Initialize sliders if it's an image
+      if (selectedElement.tag === 'IMG') {
+        const rw = Math.round(selectedElement.renderedWidth || 0);
+        const rh = Math.round(selectedElement.renderedHeight || 0);
+        setSliderWidth(rw);
+        setSliderHeight(rh);
+        setOriginalWidth(rw);
+        setOriginalHeight(rh);
+      }
     }
   }, [selectedElement]);
 
@@ -45,6 +61,11 @@ export default function Sidebar() {
     // upon receiving the SAVE_CLEAN_HTML event triggered by the message below.
     
     let finalUpdates = { ...formData, persist: true };
+
+    if (selectedElement.tag === 'IMG') {
+      finalUpdates.width = sliderWidth + 'px';
+      finalUpdates.height = sliderHeight + 'px';
+    }
   
     // Lógica de subida de imagen externa
     if (selectedElement.tag === 'IMG' && localImageFile) {
@@ -355,44 +376,78 @@ export default function Sidebar() {
                     </div>
                   )}
                  
-                 <div className="flex flex-col gap-1">
-                   <label className="text-xs font-medium text-gray-500">Ancho (ej: 100%, 200px)</label>
-                   <input 
-                     type="text"
-                     className="w-full text-sm border border-gray-300 rounded p-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                     value={formData.width}
-                     onChange={(e) => {
-                       const val = e.target.value;
-                       setFormData({...formData, width: val});
-                       if (window.__EDITOR_IFRAME_REF?.current) {
-                         window.__EDITOR_IFRAME_REF.current.contentWindow.postMessage({
-                           type: 'UPDATE_ELEMENT',
-                           payload: { id: selectedElement.id, updates: { width: val, persist: false } }
-                         }, '*');
-                       }
-                     }}
-                     placeholder="Ninguno"
-                   />
-                 </div>
-                 <div className="flex flex-col gap-1">
-                   <label className="text-xs font-medium text-gray-500">Alto (ej: auto, 150px)</label>
-                   <input 
-                     type="text"
-                     className="w-full text-sm border border-gray-300 rounded p-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                     value={formData.height}
-                     onChange={(e) => {
-                       const val = e.target.value;
-                       setFormData({...formData, height: val});
-                       if (window.__EDITOR_IFRAME_REF?.current) {
-                         window.__EDITOR_IFRAME_REF.current.contentWindow.postMessage({
-                           type: 'UPDATE_ELEMENT',
-                           payload: { id: selectedElement.id, updates: { height: val, persist: false } }
-                         }, '*');
-                       }
-                     }}
-                     placeholder="Ninguno"
-                   />
-                 </div>
+                  <div className="flex flex-col gap-3 mt-2">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-xs font-medium text-gray-500">Ancho: {sliderWidth}px</label>
+                      </div>
+                      <input 
+                        type="range"
+                        min={Math.max(0, originalWidth - 300)}
+                        max={originalWidth + 300}
+                        step={3}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-slate-800"
+                        value={sliderWidth}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value);
+                          setSliderWidth(val);
+                          if (window.__EDITOR_IFRAME_REF?.current) {
+                            window.__EDITOR_IFRAME_REF.current.contentWindow.postMessage({
+                              type: 'UPDATE_ELEMENT',
+                              payload: { id: selectedElement.id, updates: { width: val + 'px', persist: false } }
+                            }, '*');
+                          }
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-xs font-medium text-gray-500">Alto: {sliderHeight}px</label>
+                      </div>
+                      <input 
+                        type="range"
+                        min={Math.max(0, originalHeight - 300)}
+                        max={originalHeight + 300}
+                        step={3}
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-slate-800"
+                        value={sliderHeight}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value);
+                          setSliderHeight(val);
+                          if (window.__EDITOR_IFRAME_REF?.current) {
+                            window.__EDITOR_IFRAME_REF.current.contentWindow.postMessage({
+                              type: 'UPDATE_ELEMENT',
+                              payload: { id: selectedElement.id, updates: { height: val + 'px', persist: false } }
+                            }, '*');
+                          }
+                        }}
+                      />
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setSliderWidth(originalWidth);
+                        setSliderHeight(originalHeight);
+                        if (window.__EDITOR_IFRAME_REF?.current) {
+                          window.__EDITOR_IFRAME_REF.current.contentWindow.postMessage({
+                            type: 'UPDATE_ELEMENT',
+                            payload: { 
+                              id: selectedElement.id, 
+                              updates: { 
+                                width: originalWidth + 'px', 
+                                height: originalHeight + 'px', 
+                                persist: false 
+                              } 
+                            }
+                          }, '*');
+                        }
+                      }}
+                      className="mt-2 flex items-center justify-center gap-2 py-2 px-4 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                    >
+                      <RotateCcw size={14} /> Restablecer tamaño
+                    </button>
+                  </div>
                </>
             )}
 

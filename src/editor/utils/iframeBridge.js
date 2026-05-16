@@ -148,6 +148,8 @@ export const iframeScript = `
             htmlContent: target.innerHTML || '',
             width: target.getAttribute('width') || target.style.width || '',
             height: target.getAttribute('height') || target.style.height || '',
+            renderedWidth: target.getBoundingClientRect().width,
+            renderedHeight: target.getBoundingClientRect().height,
             src: target.tagName === 'IMG' ? target.src : ''
           }
         }, '*');
